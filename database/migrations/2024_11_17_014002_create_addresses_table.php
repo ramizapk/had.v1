@@ -14,7 +14,7 @@ return new class extends Migration {
             $table->id();
             $table->string('name');
             $table->boolean('is_default')->default(false);
-            $table->json('location')->nullable();
+            $table->longText('location')->nullable();
             $table->double('latitude');
             $table->double('longitude');
             $table->foreignId('customer_id')->constrained('customers')->cascadeOnDelete()->cascadeOnUpdate();

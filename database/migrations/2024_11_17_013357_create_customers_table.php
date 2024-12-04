@@ -18,6 +18,7 @@ return new class extends Migration {
             $table->string('avatar')->nullable();
             $table->boolean('is_active')->default(false);
             $table->boolean('is_suspended')->default(false);
+            $table->decimal('wallet', 10, 2)->default(0.00);
             $table->rememberToken();
             $table->timestamps();
         });

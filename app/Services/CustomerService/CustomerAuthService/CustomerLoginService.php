@@ -71,8 +71,8 @@ class CustomerLoginService
         $token = $user->createToken('auth_token')->plainTextToken;
 
         // تحميل العناوين إذا كانت موجودة
-        $user->load('addresses');
 
+        $user->load(['addresses', 'points']);
         // إرجاع الاستجابة باستخدام التريت
         return $this->successResponse([
             'customer' => new CustomerResource($user),

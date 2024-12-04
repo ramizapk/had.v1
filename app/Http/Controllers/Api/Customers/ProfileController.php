@@ -28,7 +28,7 @@ class ProfileController extends Controller
 
         $customer->avatar = $avatarPath; // حفظ المسار في قاعدة البيانات
         $customer->save();
-        $customer->load('addresses');
+        $customer->load(['addresses', 'points']);
         return $this->successResponse(new CustomerResource($customer), 'تم تحديث الصورة بنجاح');
     }
 
@@ -39,7 +39,7 @@ class ProfileController extends Controller
     public function getUserProfile()
     {
         $customer = auth()->user(); // الحصول على بيانات المستخدم الحالي
-        $customer->load('addresses');
+        $customer->load(['addresses', 'points']);
         return $this->successResponse(new CustomerResource($customer), 'تم جلب بيانات المستخدم بنجاح');
     }
 }

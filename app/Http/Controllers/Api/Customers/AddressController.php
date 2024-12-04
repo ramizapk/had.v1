@@ -106,14 +106,18 @@ class AddressController extends Controller
                 return $this->errorResponse('العنوان غير موجود', 404);
             }
 
-            // جعل العنوان الافتراضي
+            // التحقق إذا كان العنوان بالفعل افتراضيًا
+            if ($address->is_default) {
+                return $this->successResponse(null, 'هذا العنوان هو الافتراضي بالفعل');
+            }
+
+            // جعل العنوان افتراضيًا
             $customer->addresses()->update(['is_default' => false]);
             $address->update(['is_default' => true]);
 
             // إرجاع العناوين بتنسيق جديد
             return $this->successResponse($this->formatAddresses($customer), 'تم تعيين العنوان كافتراضي');
         }
-
         return $this->errorResponse('العملية غير مدعومة', 405);
     }
 
@@ -121,26 +125,17 @@ class AddressController extends Controller
     private function formatAddresses($customer)
     {
         $addresses = $customer->addresses;
-        $activeAddress = $addresses->where('is_default', true)->first();
-        $otherAddresses = $addresses->where('is_default', false);
 
-        return [
-            'locations' => [
-                'active' => $activeAddress ? [
-                    [
-                        'id' => $activeAddress->id,
-                        'name' => $activeAddress->name,
-                        'location' => "{$activeAddress->latitude},{$activeAddress->longitude}"
-                    ]
-                ] : [],
-                'other_locations' => $otherAddresses->map(function ($address) {
-                    return [
-                        'id' => $address->id,
-                        'name' => $address->name,
-                        'location' => "{$address->latitude},{$address->longitude}"
-                    ];
-                })
-            ]
-        ];
+        // تحويل العناوين باستخدام reduce مثل ما يتم في CustomerResource
+        return $addresses->reduce(function ($carry, $address) {
+            $carry[$address->is_default ? 'active' : 'other_locations'][] = [
+                'id' => $address->id,
+                'name' => $address->name,
+                'location_name' => $address->location,
+                'location' => "{$address->latitude},{$address->longitude}",
+
+            ];
+            return $carry;
+        }, ['active' => [], 'other_locations' => []]);
     }
 }

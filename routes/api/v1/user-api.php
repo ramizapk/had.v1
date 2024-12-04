@@ -4,10 +4,13 @@ use App\Http\Controllers\Api\Auth\UserAuthController;
 use App\Http\Controllers\Api\Users\AdvertisementController;
 use App\Http\Controllers\Api\Users\CategoryController;
 use App\Http\Controllers\Api\Users\DeliveryAgentController;
+use App\Http\Controllers\Api\Users\OrdersController;
+use App\Http\Controllers\Api\Users\PaymentMethodController;
 use App\Http\Controllers\Api\Users\ProductController;
 use App\Http\Controllers\Api\Users\SectionController;
 use App\Http\Controllers\Api\Users\ServiceController;
 use App\Http\Controllers\Api\Users\VendorController;
+use App\Http\Controllers\Api\Users\WalletController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('/auth')->controller(UserAuthController::class)->group(function () {
@@ -98,6 +101,13 @@ Route::prefix('/products')->controller(ProductController::class)->middleware(['a
     Route::get('/vendors/{vendorId}/categories/{categoryId}', 'getProductsByVendorAndCategory');
     Route::get('/single/{productId}', 'getProductById');
 
+
+    Route::prefix('/{productId}/discounts')->group(function () {
+        Route::post('/', 'applyDiscount'); // إضافة خصم للمنتج
+        // Route::get('/', 'getDiscounts'); // عرض جميع الخصومات لمنتج معين
+        // Route::put('/{discountId}', 'updateDiscount'); // تعديل خصم معين
+        // Route::delete('/{discountId}', 'deleteDiscount'); // حذف خصم معين
+    });
     // Route::put('/{id}', 'updateCustomisation');
     // Route::delete('/{id}', 'deleteCustomisation');
     // Route::get('/vendor/{vendorId}', 'getCustomisationsByVendor');
@@ -143,4 +153,29 @@ Route::prefix('/advertisement')->controller(AdvertisementController::class)->mid
     Route::get('/{id}', 'show');
     Route::post('/{id}', 'update');
     Route::delete('/{id}', 'destroy');
+});
+
+
+Route::prefix('/wallet')->controller(WalletController::class)->middleware(['auth:sanctum', 'isUser'])->group(function () {
+    // تعديل المحفظة
+    Route::post('/modify', 'modifyWallet');
+    Route::get('/transactions', 'getAllTransactions');
+    // عرض جميع العمليات لمحفظة عميل معين
+    Route::get('/transactions/{transactions}', 'getCustomerTransactions');
+});
+
+
+Route::prefix('/payment-methods')->controller(PaymentMethodController::class)->middleware(['auth:sanctum', 'isUser'])->group(function () {
+    Route::get('/', 'index'); // عرض جميع وسائل الدفع
+    Route::post('/', 'store'); // إضافة وسيلة دفع جديدة
+    Route::put('/{paymentMethod}', 'update'); // تعديل وسيلة دفع
+    Route::delete('/{paymentMethod}', 'destroy'); // حذف وسيلة دفع
+});
+
+
+Route::prefix('/orders')->controller(OrdersController::class)->middleware(['auth:sanctum', 'isUser'])->group(function () {
+    Route::get('/', 'index'); // عرض جميع وسائل الدفع
+    Route::post('/assign-order-to-agent/{orderId}', 'assignDeliveryAgent'); // إضافة وسيلة دفع جديدة
+    Route::post('/change-status/{orderId}', 'changeOrderStatus'); // إضافة وسيلة دفع جديدة
+
 });

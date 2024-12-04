@@ -23,18 +23,28 @@ class SectionsController extends Controller
         return $this->successResponse(SectionResource::collection($sections), 'Sections retrieved successfully.');
     }
 
-    public function getVendorsBySection($sectionId)
+    public function getVendorsBySection(Request $request, $sectionId)
     {
+        // جلب الفيندورات بناءً على القسم مع الباجينيشن
         $vendors = Vendor::where('publish', 1)
             ->where('section_id', $sectionId)
-            ->paginate(10); // عدد العناصر في كل صفحة (10 عناصر).
+            ->paginate($request->get('per_page', 10)); // عدد العناصر في كل صفحة (افتراضي 10)
 
         if ($vendors->isEmpty()) {
             return $this->errorResponse('No vendors found for this section.', 404);
         }
 
+        // إرجاع البيانات مع إضافة الباجينيشن
         return $this->successResponse(
-            VendorResource::collection($vendors)->response()->getData(true),
+            [
+                'data' => VendorResource::collection($vendors), // تحويل الفيندورات باستخدام المورد
+                'pagination' => [
+                    'current_page' => $vendors->currentPage(),
+                    'last_page' => $vendors->lastPage(),
+                    'per_page' => $vendors->perPage(),
+                    'total' => $vendors->total(),
+                ],
+            ],
             'Vendors retrieved successfully.'
         );
     }

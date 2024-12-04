@@ -76,7 +76,7 @@ class ProductController extends Controller
 
     // ********** CUSTOM PRODUCT FUNCTIONS **********
 
-    // عرض جميع المنتجات المخصصة
+
     public function getAllCustomProducts()
     {
         $customProducts = CustomProduct::all();
@@ -277,6 +277,31 @@ class ProductController extends Controller
             'pagination' => $paginationData,
         ], 'Products retrieved successfully');
 
+    }
+
+
+    public function applyDiscount(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'discount_type' => 'required|in:percentage,fixed,none',
+            'discount_amount' => 'nullable|numeric|min:0|required_if:discount_type,fixed',
+            'discount_percent' => 'nullable|numeric|min:0|max:100|required_if:discount_type,percentage',
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
+        ]);
+
+        $productItem = ProductItem::findOrFail($id);
+
+        // تحديث الحقول
+        $productItem->update($validated);
+
+        // حساب وتحديث مبلغ الخصم النهائي
+        $finalDiscount = $productItem->calculateFinalDiscount();
+
+        return $this->successResponse(
+            ['product_item' => $productItem, 'final_discount' => $finalDiscount],
+            'Discount applied successfully'
+        );
     }
 
 

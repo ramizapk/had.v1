@@ -20,6 +20,7 @@ class Customer extends Authenticatable
         'avatar',
         'is_active',
         'is_suspended',
+        'wallet',
     ];
 
     protected $hidden = [
@@ -31,6 +32,22 @@ class Customer extends Authenticatable
         'password' => 'hashed',
         'is_active' => 'boolean'
     ];
+
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::created(function ($customer) {
+            $customer->points()->create([
+                'points' => 0, // النقاط الافتراضية
+                'sticker_25' => false,
+                'sticker_50' => false,
+                'sticker_75' => false,
+                'sticker_100' => false,
+            ]);
+        });
+    }
 
 
     public function routeNotificationForAlawael($notification = null)
@@ -70,6 +87,12 @@ class Customer extends Authenticatable
     public function scopeActiveCustomers($query)
     {
         return $query->where('is_active', 1)->where('is_suspended', 0);
+    }
+
+
+    public function points()
+    {
+        return $this->hasOne(Point::class, 'customer_id', 'id');
     }
 
 

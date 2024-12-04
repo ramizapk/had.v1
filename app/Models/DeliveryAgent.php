@@ -9,7 +9,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-class DeliveryAgent extends Model
+use Illuminate\Foundation\Auth\User as Authenticatable;
+class DeliveryAgent extends Authenticatable
 {
     use HasApiTokens, HasFactory, SoftDeletes;
 

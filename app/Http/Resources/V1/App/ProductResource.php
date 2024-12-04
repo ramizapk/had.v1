@@ -20,6 +20,7 @@ class ProductResource extends JsonResource
             'product_name' => $this->product_name,
             'description' => $this->description,
             'is_offer' => $this->is_offer,
+            'vendor' => $this->vendor_id,
             'offer_price' => $this->is_offer ? $this->offer_price : null,
             'images' => $this->images->map(function ($image) {
                 return [

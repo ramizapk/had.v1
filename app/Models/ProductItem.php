@@ -68,6 +68,39 @@ class ProductItem extends Model
     }
 
 
+    public function calculateFinalDiscount()
+    {
+        $now = now();
+
+        // تحقق من صلاحية الخصم
+        if (
+            $this->discount_type !== 'none' &&
+            $this->date_from !== null &&
+            $this->date_to !== null &&
+            $now->between($this->date_from, $this->date_to)
+        ) {
+            if ($this->discount_type === 'percentage') {
+                // خصم النسبة المئوية
+                $discountValue = ($this->price * $this->discount_percent) / 100;
+            } elseif ($this->discount_type === 'fixed') {
+                // خصم القيمة الثابتة
+                $discountValue = $this->discount_amount;
+            }
+
+            // احسب السعر النهائي بعد الخصم، مع ضمان أن لا يقل عن صفر
+            $finalDiscount = max(0, $this->price - $discountValue);
+
+            // تحديث حقل الخصم في قاعدة البيانات
+            $this->update(['discount' => $finalDiscount]);
+
+            return $finalDiscount;
+        }
+
+        // في حال عدم وجود خصم، يتم وضع نفس السعر كقيمة للخصم
+        $this->update(['discount' => $this->price]);
+        return $this->price;
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by', 'id');

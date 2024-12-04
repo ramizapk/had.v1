@@ -4,6 +4,7 @@
 use App\Http\Controllers\Api\Customers\AddressController;
 use App\Http\Controllers\Api\Customers\AdvertisementController;
 use App\Http\Controllers\Api\Customers\FavoritesController;
+use App\Http\Controllers\Api\Customers\OrdersController;
 use App\Http\Controllers\Api\Customers\ProductsController;
 use App\Http\Controllers\Api\Customers\ProfileController;
 use App\Http\Controllers\Api\Customers\SectionsController;
@@ -61,6 +62,14 @@ Route::prefix('/app')->middleware(['auth:sanctum', 'isCustomer'])->group(functio
         Route::delete('/favorites/vendor/delete/{id}', 'remove');
         Route::delete('/favorites/vendor/clear', 'clear');
     });
+
+
+    Route::prefix('/orders')->controller(OrdersController::class)->group(function () {
+        Route::post('/calc-info', 'calculateDistanceAndDeliveryFee');
+        Route::post('/make-order', 'checkOrder');
+        Route::get('/my-orders', 'index');
+    });
+
 });
 
 

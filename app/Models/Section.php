@@ -14,6 +14,7 @@ class Section extends Model
         'name',
         'image',
         'publish',
+        'returnable',
         'created_by',
         'updated_by',
     ];

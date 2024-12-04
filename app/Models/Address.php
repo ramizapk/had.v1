@@ -26,7 +26,7 @@ class Address extends Model
         'is_default' => 'boolean',
     ];
 
-    public function getLocationAttribute(): array
+    public function getAddressAttribute(): array
     {
         return [
             "lat" => (float) $this->latitude,
@@ -49,5 +49,47 @@ class Address extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class, 'customer_id', 'id');
+    }
+
+
+    public function calculateDeliveryDistanceAndTime(Vendor $vendor)
+    {
+        // إحداثيات العميل
+        $customerLat = $this->latitude;
+        $customerLng = $this->longitude;
+
+        // إحداثيات الفيندور
+        $vendorLat = $vendor->latitude;
+        $vendorLng = $vendor->longitude;
+
+        // حساب المسافة باستخدام صيغة Haversine
+        $earthRadius = 6371; // نصف قطر الأرض بالكيلومتر
+
+        $latFrom = deg2rad($customerLat);
+        $lonFrom = deg2rad($customerLng);
+        $latTo = deg2rad($vendorLat);
+        $lonTo = deg2rad($vendorLng);
+
+        $latDelta = $latTo - $latFrom;
+        $lonDelta = $lonTo - $lonFrom;
+
+        $a = sin($latDelta / 2) * sin($latDelta / 2) +
+            cos($latFrom) * cos($latTo) *
+            sin($lonDelta / 2) * sin($lonDelta / 2);
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+        $distanceKm = $earthRadius * $c; // المسافة بالكيلومتر
+
+        // تحويل المسافة إلى متر
+        $distanceM = $distanceKm * 1000;
+
+        // حساب الوقت التقريبي للتوصيل (افتراض أن المتوسط هو 40 كم/ساعة)
+        $deliveryTimeHours = $distanceKm / 40; // الزمن بالساعة
+        $deliveryTimeMinutes = round($deliveryTimeHours * 60); // الزمن بالدقائق
+
+        return [
+            'distance_km' => round($distanceKm, 2),
+            'distance_m' => round($distanceM, 0),
+            'estimated_time_minutes' => $deliveryTimeMinutes,
+        ];
     }
 }
