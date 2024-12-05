@@ -30,7 +30,7 @@ class FavoritesController extends Controller
     {
         $customer = Auth::user();
 
-
+        // تحقق من وجود المنتج
         if (!Product::find($productId)) {
             return $this->errorResponse('Product not found.', 404);
         }
@@ -42,23 +42,31 @@ class FavoritesController extends Controller
         if ($favorite) {
             // المنتج موجود بالفعل في المفضلة - نحذفه
             $favorite->delete();
-            return $this->successResponse(null, 'Product removed from favorites.');
+            $message = 'Product removed from favorites.';
         } else {
             // المنتج غير موجود - نضيفه
             Favorite::create([
                 'customer_id' => $customer->id,
                 'product_id' => $productId,
             ]);
-
-            return $this->successResponse(null, 'Product added to favorites.');
+            $message = 'Product added to favorites.';
         }
+
+        // جلب المفضلة الحالية للمستخدم
+        $favorites = Favorite::where('customer_id', $customer->id)
+            ->with('product')
+            ->get();
+
+        return $this->successResponse(
+            FavoritesResource::collection($favorites),
+            $message
+        );
     }
 
     // حذف منتج معين من المفضلة
     public function remove($id)
     {
         $customer = Auth::user();
-
 
         $favorite = Favorite::where('customer_id', $customer->id)
             ->where('id', $id)
@@ -69,7 +77,16 @@ class FavoritesController extends Controller
         }
 
         $favorite->delete();
-        return $this->successResponse(null, 'Product removed from favorites.');
+
+        // جلب المفضلة الحالية للمستخدم
+        $favorites = Favorite::where('customer_id', $customer->id)
+            ->with('product')
+            ->get();
+
+        return $this->successResponse(
+            FavoritesResource::collection($favorites),
+            'Product removed from favorites.'
+        );
     }
 
     // حذف جميع المفضلة
@@ -79,6 +96,14 @@ class FavoritesController extends Controller
 
         Favorite::where('customer_id', $customer->id)->delete();
 
-        return $this->successResponse(null, 'All favorites cleared.');
+        // جلب المفضلة الحالية للمستخدم
+        $favorites = Favorite::where('customer_id', $customer->id)
+            ->with('product')
+            ->get();
+
+        return $this->successResponse(
+            FavoritesResource::collection($favorites),
+            'All favorites cleared.'
+        );
     }
 }

@@ -15,14 +15,19 @@ class SectionSeeder extends Seeder
     {
         $faker = Faker::create();
 
-        for ($i = 1; $i <= 20; $i++) {
+        for ($i = 1; $i <= 5; $i++) {
+            $uniqueName = ucfirst($faker->unique()->word) . " Section " . $i; // اسم مميز لكل قسم
+
             Section::create([
-                'name' => $faker->word, // توليد اسم عشوائي
-                'image' => $faker->unique()->word . '.jpg', // صورة عشوائية
-                'publish' => $faker->boolean, // نشر أو عدم نشر (true/false)
+                'name' => $uniqueName, // اسم فريد
+                'image' => 'uploads/sections/section_' . $i . '.jpg', // مسار صورة فريد
+                'publish' => 1, // نشر القسم
                 'created_by' => $faker->numberBetween(1, 5), // رقم منشئ عشوائي بين 1 و 5
-                'updated_by' => null,
+                'updated_by' => null, // فارغ مبدئيًا
             ]);
         }
+
+        // إعادة تعيين الـ Unique Generator لتجنب المشاكل في عمليات Seed لاحقة
+        $faker->unique(true);
     }
 }

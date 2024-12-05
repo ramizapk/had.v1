@@ -39,16 +39,28 @@ class VendorFavoritesController extends Controller
             ->first();
 
         if ($favorite) {
+            // إزالة الفيندور من المفضلة
             $favorite->delete();
-            return $this->successResponse(null, 'Vendor removed from favorites.');
+            $message = 'Vendor removed from favorites.';
         } else {
+            // إضافة الفيندور إلى المفضلة
             $newFavorite = VendorFavorite::create([
                 'customer_id' => $customer->id,
                 'vendor_id' => $vendorId,
             ]);
-
-            return $this->successResponse(new VendorFavoriteResource($newFavorite), 'Vendor added to favorites.');
+            $message = 'Vendor added to favorites.';
         }
+
+        // جلب المفضلة الحالية للمستخدم
+        $favorites = VendorFavorite::where('customer_id', $customer->id)
+            ->with('vendor')
+            ->get();
+
+        // إرجاع المفضلات بعد العملية
+        return $this->successResponse(
+            VendorFavoriteResource::collection($favorites),
+            $message
+        );
     }
 
 
@@ -67,15 +79,34 @@ class VendorFavoritesController extends Controller
 
         // حذف المفضلة
         $favorite->delete();
-        return $this->successResponse(null, 'Vendor removed from favorites.');
+
+        // جلب المفضلة الحالية للمستخدم بعد الحذف
+        $favorites = VendorFavorite::where('customer_id', $customer->id)
+            ->with('vendor')
+            ->get();
+
+        return $this->successResponse(
+            VendorFavoriteResource::collection($favorites),
+            'Vendor removed from favorites.'
+        );
     }
-    // حذف جميع الفيندور المفضل
+
+    // حذف جميع الفيندورات من المفضلة
     public function clear()
     {
         $customer = Auth::user();
 
+        // حذف جميع الفيندورات المفضلة
         VendorFavorite::where('customer_id', $customer->id)->delete();
 
-        return $this->successResponse(null, 'All vendor favorites cleared.');
+        // جلب المفضلة الحالية للمستخدم بعد الحذف
+        $favorites = VendorFavorite::where('customer_id', $customer->id)
+            ->with('vendor')
+            ->get();
+
+        return $this->successResponse(
+            VendorFavoriteResource::collection($favorites),
+            'All vendor favorites cleared.'
+        );
     }
 }

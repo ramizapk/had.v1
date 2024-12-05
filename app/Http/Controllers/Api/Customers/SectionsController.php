@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 class SectionsController extends Controller
 {
     use ApiResponse;
+
     public function getSections()
     {
         // جلب الأقسام المنشورة فقط
@@ -37,7 +38,7 @@ class SectionsController extends Controller
         // إرجاع البيانات مع إضافة الباجينيشن
         return $this->successResponse(
             [
-                'data' => VendorResource::collection($vendors), // تحويل الفيندورات باستخدام المورد
+                'data' => VendorResource::collection($vendors),  // هنا تُمَرر الـ VendorResource
                 'pagination' => [
                     'current_page' => $vendors->currentPage(),
                     'last_page' => $vendors->lastPage(),

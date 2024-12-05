@@ -95,7 +95,7 @@ class OrdersController extends Controller
     public function getNewOrdersForAgent(Request $request)
     {
         // جلب الطلبات التي تخص السائق الحالي في حالة "معلق" أو "في الطريق"
-        $orders = Order::with([
+        $orders = Order::with(relations: [
             'orderItems.productItem.product.images',
             'orderItems.customisations.customisation',
             'orderItems.customisations.customProduct',

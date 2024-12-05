@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\V1\App;
 
+use App\Models\Favorite;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Storage;
@@ -15,6 +16,16 @@ class ProductResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+
+        $isFavorite = false;
+
+        // التحقق مما إذا كان المستخدم مسجل دخول وأضفى المنتج للمفضلة
+        if (auth('sanctum')->check()) {
+            $isFavorite = Favorite::where('customer_id', auth('sanctum')->id())
+                ->where('product_id', $this->id)
+                ->exists();
+        }
+
         return [
             'id' => $this->id,
             'product_name' => $this->product_name,
@@ -57,6 +68,7 @@ class ProductResource extends JsonResource
                     ];
                 }
             }),
+            'is_favorite' => $isFavorite,
         ];
     }
 }

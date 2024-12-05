@@ -9,6 +9,9 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderItemCustomisation;
 use App\Models\ProductItem;
+use App\Models\ReturnImage;
+use App\Models\ReturnItem;
+use App\Models\Returns;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use App\Models\Vendor;
@@ -353,5 +356,135 @@ class OrdersController extends Controller
         ], 'Orders retrieved successfully');
     }
 
+
+
+    public function submitReturn(Request $request)
+    {
+        return DB::transaction(function () use ($request) {
+            $request->validate([
+                'order_id' => 'required|exists:orders,id',
+                'return_items' => 'required|array',
+                'return_items.*.order_item_id' => 'required|exists:order_items,id',
+                'return_items.*.quantity' => 'required|integer|min:1',
+                'images' => 'nullable|array|max:5', // يمكن رفع حتى 5 صور
+                'images.*' => 'nullable|image|max:2048', // الحد الأقصى للصورة 2 ميجابايت
+                'reason' => 'required|string|max:500',
+            ]);
+
+            $order = Order::with(['orderItems.customisations.customProduct'])->findOrFail($request->order_id);
+            $customer = auth()->user();
+
+            // تحقق من أن الطلب ينتمي إلى العميل
+            if ($order->customer_id !== $customer->id) {
+                return $this->errorResponse('You do not have permission to return this order.', 403);
+            }
+
+            // حساب تكلفة التوصيل بناءً على المسافة
+            $deliveryFee = $this->calculateDeliveryFee($order->distance);
+
+            // إنشاء المرتجع
+            $returnOrder = Returns::create([
+                'order_id' => $order->id,
+                'delivery_agent_id' => null, // يتم التعيين لاحقًا
+                'delivery_fee' => $deliveryFee,
+                'distance' => $order->distance,
+                'status' => 'pending',
+                'reason' => $request->reason,
+            ]);
+
+            // حفظ المنتجات المرتجعة
+            foreach ($request->return_items as $item) {
+                $orderItem = $order->orderItems->where('id', $item['order_item_id'])->first();
+                if (!$orderItem || $item['quantity'] > $orderItem->quantity) {
+                    return $this->errorResponse('Invalid item or quantity exceeds the ordered quantity.', 400);
+                }
+
+                ReturnItem::create([
+                    'return_id' => $returnOrder->id,
+                    'order_item_id' => $item['order_item_id'],
+                    'quantity' => $item['quantity'],
+                ]);
+            }
+
+            // حفظ الصور المرتبطة بالمرتجع
+            if ($request->hasFile('images')) {
+                foreach ($request->file('images') as $image) {
+                    $path = $image->store('returns_images', 'public');
+                    ReturnImage::create([
+                        'returns_id' => $returnOrder->id,
+                        'image_url' => $path,
+                    ]);
+                }
+            }
+
+            return $this->successResponse([
+                'return_id' => $returnOrder->id,
+                'delivery_fee' => $deliveryFee,
+            ], 'Return request submitted successfully.');
+        });
+    }
+
+
+    public function getReturns(Request $request)
+    {
+        $perPage = $request->get('per_page', 10);
+        $returns = Returns::whereHas('order', function ($query) {
+            $query->where('customer_id', auth()->id());
+        })
+            ->with(['order', 'returnItems.orderItem.productItem.product.images', 'returnImages'])
+            ->paginate($perPage);
+
+        $formattedReturns = $returns->getCollection()->map(function ($returnOrder) {
+            return [
+                'return_id' => $returnOrder->id,
+                'order_id' => $returnOrder->order->id,
+                'delivery_fee' => $returnOrder->delivery_fee,
+                'status' => $returnOrder->status,
+                'reason' => $returnOrder->reason,
+                'images' => $returnOrder->returnImages->map(function ($image) {
+                    return url('storage/' . $image->image_url);
+                }),
+                'items' => $returnOrder->returnItems->map(function ($returnItem) {
+                    $orderItem = $returnItem->orderItem;
+                    $product = $orderItem->productItem->product;
+
+                    return [
+                        'order_item_id' => $orderItem->id,
+                        'product_name' => $product->product_name,
+                        'product_image' => $product->images->where('is_default', true)->first()?->img_url
+                            ? url($product->images->where('is_default', true)->first()->img_url)
+                            : ($product->images->first()?->img_url ? url($product->images->first()->img_url) : null),
+                        'quantity' => $returnItem->quantity,
+                        'unit_price' => $orderItem->unit_price,
+                        'total_price' => $orderItem->unit_price * $returnItem->quantity,
+                        'customisations' => $orderItem->customisations->groupBy('customisation_id')->map(function ($group) {
+                            $customisation = $group->first()->customisation;
+                            return [
+                                'id' => $customisation->id,
+                                'name' => $customisation->name,
+                                'items' => $group->map(function ($item) {
+                                    return [
+                                        'id' => $item->customProduct->id,
+                                        'name' => $item->customProduct->name,
+                                        'price' => $item->customProduct->price,
+                                    ];
+                                }),
+                            ];
+                        })->values(),
+                    ];
+                }),
+            ];
+        });
+
+        return $this->successResponse([
+            'data' => $formattedReturns,
+            'pagination' => [
+                'current_page' => $returns->currentPage(),
+                'last_page' => $returns->lastPage(),
+                'per_page' => $returns->perPage(),
+                'total' => $returns->total(),
+            ],
+        ], 'Returns retrieved successfully.');
+    }
 
 }
