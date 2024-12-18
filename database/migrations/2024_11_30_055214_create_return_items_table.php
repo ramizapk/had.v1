@@ -15,6 +15,9 @@ return new class extends Migration {
             $table->foreignId('return_id')->constrained('returns')->cascadeOnDelete();
             $table->foreignId('order_item_id')->constrained('order_items')->cascadeOnDelete();
             $table->integer('quantity');
+            $table->decimal('unit_price', 10, 2);
+            $table->decimal('total_customisation_price', 10, 2)->default(0); // New column
+            $table->decimal('total_price', 10, 2);
             $table->timestamps();
         });
     }

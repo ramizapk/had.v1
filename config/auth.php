@@ -45,9 +45,14 @@ return [
             'provider' => 'customers',
         ],
         'delivery' => [
-            'driver' => 'session',
+            'driver' => 'sanctum',
             'provider' => 'delivery_agents',
         ],
+        'user' => [
+            'driver' => 'sanctum',
+            'provider' => 'users',
+        ],
+
     ],
 
     /*

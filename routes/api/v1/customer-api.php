@@ -3,6 +3,7 @@
 
 use App\Http\Controllers\Api\Customers\AddressController;
 use App\Http\Controllers\Api\Customers\AdvertisementController;
+use App\Http\Controllers\Api\Customers\ApplicationSettingController;
 use App\Http\Controllers\Api\Customers\FavoritesController;
 use App\Http\Controllers\Api\Customers\OrdersController;
 use App\Http\Controllers\Api\Customers\ProductsController;
@@ -70,6 +71,17 @@ Route::prefix('/app')->middleware(['auth:sanctum', 'isCustomer'])->group(functio
         Route::get('/my-orders', 'index');
     });
 
+    Route::prefix('/direct-orders')->controller(OrdersController::class)->group(function () {
+
+        Route::post('/make-order', 'addDirectOrder');
+        Route::get('/my-orders', 'getUserDirectOrders');
+    });
+
+    Route::prefix('/returns')->controller(OrdersController::class)->group(function () {
+        Route::post('/make-return', 'submitReturn');
+        Route::get('/my-returns', 'getReturns');
+    });
+
 });
 
 
@@ -98,7 +110,11 @@ Route::prefix('/public')->group(function () {
         Route::get('/products/vendors/{vendorId}', 'getProductsByVendor');
         Route::get('/products/vendors/{vendorId}/categories/{categoryId}', 'getProductsByVendorAndCategory');
         Route::get('/products/{productId}', 'getProductById');
+        Route::get('/gallery/{vendorId}', 'getVendorsGallery');
     });
 
+    Route::controller(ApplicationSettingController::class)->group(function () {
+        Route::get('/app-settings', 'getSettings');
+    });
 
 });

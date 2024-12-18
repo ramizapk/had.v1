@@ -12,6 +12,8 @@ class OrderItem extends Model
     protected $fillable = [
         'order_id',
         'product_item_id',
+        'offer_id',
+        'is_offer',
         'quantity',
         'unit_price',
         'is_discount',
@@ -43,10 +45,25 @@ class OrderItem extends Model
         return $this->hasMany(OrderItemCustomisation::class);
     }
 
+
+    public function offer()
+    {
+        return $this->belongsTo(Product::class); // العلاقة الجديدة
+    }
+
+    public function isOffer()
+    {
+        return $this->is_offer;
+    }
     // Custom Methods
     public function calculateTotalPrice()
     {
         $total = $this->quantity * $this->unit_price_after_discount;
         return $total;
+    }
+
+    public function returnItems()
+    {
+        return $this->hasOne(ReturnItem::class);
     }
 }

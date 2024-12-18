@@ -21,6 +21,7 @@ class CategoryResource extends JsonResource
             'publish' => $this->publish,
             'order' => $this->order,
             'section_id' => $this->section_id,
+            'is_offer' => $this->is_offer,
             'created_by' => $this->created_by,
             'updated_by' => $this->updated_by,
             'created_at' => $this->created_at,

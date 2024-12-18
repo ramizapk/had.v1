@@ -22,10 +22,15 @@ class VendorResource extends JsonResource
             'email' => $this->email,
             'icon' => $this->icon ? Storage::url($this->icon) : null,  // عرض الرابط الكامل للصورة
             'publish' => $this->publish,
+            'direct_order' => $this->direct_order,
+            'is_service_provider' => $this->is_service_provider,
             'address' => $this->address,
             'latitude' => $this->latitude,
             'longitude' => $this->longitude,
-            'section' => $this->section ? $this->section->name : null,
+            'section' => [
+                'id' => $this->section->id,
+                'name' => $this->section->name,
+            ],
             'work_times' => WorkTimeResource::collection($this->workTimes),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

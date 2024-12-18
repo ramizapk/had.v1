@@ -4,20 +4,31 @@ namespace App\Http\Controllers\Api\DeliveryAgents;
 
 use App\Http\Controllers\Controller;
 use App\Models\DeliveryAgentOrder;
+use App\Models\DeliveryAgentReturn;
 use App\Models\Order;
 use App\Models\OrderStatusLog;
+use App\Models\Returns;
+use App\Services\ReturnService;
 use Illuminate\Http\Request;
 use App\Traits\ApiResponse;
+use App\Services\OrderService;
 class OrdersController extends Controller
 {
     use ApiResponse;
-    public function handleOrderAcceptance(Request $request, $orderId)
+    public function handleOrderAcceptance(Request $request, $orderId, OrderService $orderFormattingService)
     {
         // $validatedData = $request->validate([
         //     'accept' => 'required|boolean', // يجب أن تكون القيمة موجودة ومنطقية (true/false)
         // ]);
         // التحقق من وجود الطلب
-        $order = Order::findOrFail($orderId);
+        $order = Order::with([
+            'orderItems.productItem.product.images',
+            'orderItems.customisations.customisation',
+            'orderItems.customisations.customProduct',
+            'vendor',
+            'deliveryAgent',
+            'customer',
+        ])->findOrFail($orderId);
 
         // التحقق من وجود السائق
         $deliveryAgentOrder = DeliveryAgentOrder::where('order_id', $orderId)
@@ -50,18 +61,29 @@ class OrdersController extends Controller
 
         // حفظ التغييرات في الطلب
         $order->save();
-
+        $formattedOrders = $orderFormattingService->formatOrder($order);
         return $this->successResponse(
-            $order,
+            $formattedOrders,
             $statusMessage
         );
     }
 
     // API لتغيير حالة الطلب إلى "في الطريق" أو "تم استلامه" أو "تم التوصيل"
-    public function updateOrderStatus(Request $request, $orderId)
+    public function updateOrderStatus(Request $request, $orderId, OrderService $orderFormattingService)
     {
         // التحقق من وجود الطلب
-        $order = Order::findOrFail($orderId);
+        $order = Order::with([
+            'orderItems.productItem.product.images',
+            'orderItems.customisations.customisation',
+            'orderItems.customisations.customProduct',
+            'vendor',
+
+            'deliveryAgent',
+            'customer',
+        ])->whereHas('deliveryAgentOrders', function ($query) {
+            // تحقق من أن السائق الحالي هو المعين للطلب
+            $query->where('delivery_agent_id', auth()->id());
+        })->findOrFail($orderId);
 
         // التحقق من الحالة الجديدة وإجراء التحديث بناءً عليها
         $newStatus = $request->status;
@@ -80,19 +102,22 @@ class OrdersController extends Controller
         if ($newStatus == 'delivered' && $order->status != 'picked_up') {
             return $this->errorResponse('لا يمكن تغيير الحالة إلى "تم التوصيل" لأن الطلب لم يتم استلامه بعد.', 400);
         }
+        if ($newStatus == 'delivered' && $order->status != 'delivered') {
+            return $this->errorResponse('لا يمكن تغيير الحالة إلى "تم التوصيل" لأن الطلب لم يتم استلامه بعد.', 400);
+        }
 
         // تحديث حالة الطلب
         $order->status = $newStatus;
         $order->save();
-
+        $formattedOrders = $orderFormattingService->formatOrder($order);
         return $this->successResponse(
-            $order,
+            $formattedOrders,
             "تم تحديث حالة الطلب إلى \"$newStatus\"."
         );
     }
 
 
-    public function getNewOrdersForAgent(Request $request)
+    public function getNewOrdersForAgent(Request $request, OrderService $orderFormattingService)
     {
         // جلب الطلبات التي تخص السائق الحالي في حالة "معلق" أو "في الطريق"
         $orders = Order::with(relations: [
@@ -100,7 +125,7 @@ class OrdersController extends Controller
             'orderItems.customisations.customisation',
             'orderItems.customisations.customProduct',
             'vendor',
-            'address',
+
             'deliveryAgent',
             'customer',
         ])
@@ -111,88 +136,8 @@ class OrdersController extends Controller
             ->whereIn('status', ['order_assigned'])
             ->orderBy('created_at', 'desc')  // ترتيب حسب تاريخ الإنشاء (أحدث أولاً)
             ->paginate(10);  // تحديد عدد العناصر في الصفحة، يمكن تعديله بناءً على الحاجة
-        $formattedOrders = $orders->getCollection()->map(function ($order) {
-            $products = $order->orderItems->groupBy('product_item_id')->map(function ($items) {
-                $productItem = $items->first()->productItem;
-                $product = $productItem->product;
 
-                return [
-                    'id' => $product->id,
-                    'name' => $product->product_name,
-                    'image_url' => $product->images->where('is_default', true)->first()?->img_url
-                        ? url($product->images->where('is_default', true)->first()?->img_url)
-                        : ($product->images->first()?->img_url ? url($product->images->first()?->img_url) : null),
-                    'items' => $items->map(function ($item) {
-                        return [
-                            'id' => $item->id,
-                            'product_item_id' => $item->product_item_id,
-                            'name' => $item->productItem->name,
-                            'customisations' => $item->customisations->groupBy('customisation_id')->map(function ($customisationGroup) {
-                                $customisation = $customisationGroup->first()->customisation;
-                                return [
-                                    'id' => $customisation->id,
-                                    'name' => $customisation->name,
-                                    'items' => $customisationGroup->map(function ($customisationItem) {
-                                        return [
-                                            'id' => $customisationItem->customProduct->id,
-                                            'name' => $customisationItem->customProduct->name,
-                                            'price' => $customisationItem->customProduct->price,
-                                        ];
-                                    })->toArray()
-                                ];
-                            })->values()->toArray()
-                        ];
-                    })->toArray()
-                ];
-            })->values()->toArray();
-
-            return [
-                'id' => $order->id,
-                'vendor' => [
-                    'id' => $order->vendor->id,
-                    'name' => $order->vendor->name,
-                    'icon' => $order->vendor->icon ? url($order->vendor->icon) : null,
-                    'address' => $order->vendor->address,
-                    'phone_one' => $order->vendor->phone_one,
-                    'phone_two' => $order->vendor->phone_two,
-                    'email' => $order->vendor->email,
-                    'latitude' => $order->vendor->latitude,
-                    'longitude' => $order->vendor->longitude,
-                ],
-                'address' => [
-                    'name' => $order->address->name,
-                    'location' => $order->address->location,
-                    'latitude' => $order->address->latitude,
-                    'longitude' => $order->address->longitude,
-                ],
-                'delivery_agent' => $order->deliveryAgent ? [
-                    'id' => $order->deliveryAgent->id,
-                    'name' => $order->deliveryAgent->name,
-                    'phone' => $order->deliveryAgent->phone,
-                    'avatar' => $order->deliveryAgent->avatar ? url($order->deliveryAgent->avatar) : null,
-                ] : null,
-                'customer' => [
-                    'id' => $order->customer->id,
-                    'name' => $order->customer->name,
-                    'phone_number' => $order->customer->phone_number,
-                    'avatar' => $order->customer->avatar ? url($order->customer->avatar) : null,
-                    'wallet' => $order->customer->wallet,
-                    'is_active' => $order->customer->is_active,
-                    'is_suspended' => $order->customer->is_suspended,
-                ],
-                'is_coupon' => $order->is_coupon,
-                'used_coupon' => $order->used_coupon,
-                'payment_method' => $order->payment_method,
-                'total_price' => $order->total_price,
-                'delivery_fee' => $order->delivery_fee,
-                'final_price' => $order->final_price,
-                'notes' => $order->notes,
-                'is_returnable' => $order->is_returnable,
-                'distance' => $order->distance,
-                'status' => $order->status,
-                'products' => $products,
-            ];
-        });
+        $formattedOrders = $orderFormattingService->formatOrders($orders);
         return $this->successResponse([
             'data' => $formattedOrders,
             'pagination' => [
@@ -205,7 +150,7 @@ class OrdersController extends Controller
     }
 
 
-    public function getCompletedOrdersForAgent(Request $request)
+    public function getCompletedOrdersForAgent(Request $request, OrderService $orderFormattingService)
     {
         // جلب الطلبات التي تخص السائق الحالي في حالة "تم استلامه" أو "تم التوصيل"
         $orders = Order::with([
@@ -213,7 +158,7 @@ class OrdersController extends Controller
             'orderItems.customisations.customisation',
             'orderItems.customisations.customProduct',
             'vendor',
-            'address',
+
             'deliveryAgent',
             'customer',
         ])
@@ -225,88 +170,7 @@ class OrdersController extends Controller
             ->orderBy('updated_at', 'desc')  // ترتيب حسب تاريخ التحديث (أحدث أولاً)
             ->paginate(10);  // تحديد عدد العناصر في الصفحة، يمكن تعديله بناءً على الحاجة
 
-        $formattedOrders = $orders->getCollection()->map(function ($order) {
-            $products = $order->orderItems->groupBy('product_item_id')->map(function ($items) {
-                $productItem = $items->first()->productItem;
-                $product = $productItem->product;
-
-                return [
-                    'id' => $product->id,
-                    'name' => $product->product_name,
-                    'image_url' => $product->images->where('is_default', true)->first()?->img_url
-                        ? url($product->images->where('is_default', true)->first()?->img_url)
-                        : ($product->images->first()?->img_url ? url($product->images->first()?->img_url) : null),
-                    'items' => $items->map(function ($item) {
-                        return [
-                            'id' => $item->id,
-                            'product_item_id' => $item->product_item_id,
-                            'name' => $item->productItem->name,
-                            'customisations' => $item->customisations->groupBy('customisation_id')->map(function ($customisationGroup) {
-                                $customisation = $customisationGroup->first()->customisation;
-                                return [
-                                    'id' => $customisation->id,
-                                    'name' => $customisation->name,
-                                    'items' => $customisationGroup->map(function ($customisationItem) {
-                                        return [
-                                            'id' => $customisationItem->customProduct->id,
-                                            'name' => $customisationItem->customProduct->name,
-                                            'price' => $customisationItem->customProduct->price,
-                                        ];
-                                    })->toArray()
-                                ];
-                            })->values()->toArray()
-                        ];
-                    })->toArray()
-                ];
-            })->values()->toArray();
-
-            return [
-                'id' => $order->id,
-                'vendor' => [
-                    'id' => $order->vendor->id,
-                    'name' => $order->vendor->name,
-                    'icon' => $order->vendor->icon ? url($order->vendor->icon) : null,
-                    'address' => $order->vendor->address,
-                    'phone_one' => $order->vendor->phone_one,
-                    'phone_two' => $order->vendor->phone_two,
-                    'email' => $order->vendor->email,
-                    'latitude' => $order->vendor->latitude,
-                    'longitude' => $order->vendor->longitude,
-                ],
-                'address' => [
-                    'name' => $order->address->name,
-                    'location' => $order->address->location,
-                    'latitude' => $order->address->latitude,
-                    'longitude' => $order->address->longitude,
-                ],
-                'delivery_agent' => $order->deliveryAgent ? [
-                    'id' => $order->deliveryAgent->id,
-                    'name' => $order->deliveryAgent->name,
-                    'phone' => $order->deliveryAgent->phone,
-                    'avatar' => $order->deliveryAgent->avatar ? url($order->deliveryAgent->avatar) : null,
-                ] : null,
-                'customer' => [
-                    'id' => $order->customer->id,
-                    'name' => $order->customer->name,
-                    'phone_number' => $order->customer->phone_number,
-                    'avatar' => $order->customer->avatar ? url($order->customer->avatar) : null,
-                    'wallet' => $order->customer->wallet,
-                    'is_active' => $order->customer->is_active,
-                    'is_suspended' => $order->customer->is_suspended,
-                ],
-                'is_coupon' => $order->is_coupon,
-                'used_coupon' => $order->used_coupon,
-                'payment_method' => $order->payment_method,
-                'total_price' => $order->total_price,
-                'delivery_fee' => $order->delivery_fee,
-                'final_price' => $order->final_price,
-                'notes' => $order->notes,
-                'is_returnable' => $order->is_returnable,
-                'distance' => $order->distance,
-                'status' => $order->status,
-                'products' => $products,
-            ];
-        });
+        $formattedOrders = $orderFormattingService->formatOrders($orders);
 
         // إضافة بيانات الباجينيشن إلى الاستجابة
         return $this->successResponse([
@@ -321,7 +185,7 @@ class OrdersController extends Controller
     }
 
 
-    public function getUnderProcessingOrdersForAgent(Request $request)
+    public function getUnderProcessingOrdersForAgent(Request $request, OrderService $orderFormattingService)
     {
         // جلب الطلبات التي تخص السائق الحالي في حالة "معلق" أو "في الطريق"
         $orders = Order::with([
@@ -329,7 +193,7 @@ class OrdersController extends Controller
             'orderItems.customisations.customisation',
             'orderItems.customisations.customProduct',
             'vendor',
-            'address',
+
             'deliveryAgent',
             'customer',
         ])
@@ -340,88 +204,8 @@ class OrdersController extends Controller
             ->whereIn('status', ['on_the_way', 'picked_up'])
             ->orderBy('created_at', 'desc')  // ترتيب حسب تاريخ الإنشاء (أحدث أولاً)
             ->paginate(10);  // تحديد عدد العناصر في الصفحة، يمكن تعديله بناءً على الحاجة
-        $formattedOrders = $orders->getCollection()->map(function ($order) {
-            $products = $order->orderItems->groupBy('product_item_id')->map(function ($items) {
-                $productItem = $items->first()->productItem;
-                $product = $productItem->product;
+        $formattedOrders = $orderFormattingService->formatOrders($orders);
 
-                return [
-                    'id' => $product->id,
-                    'name' => $product->product_name,
-                    'image_url' => $product->images->where('is_default', true)->first()?->img_url
-                        ? url($product->images->where('is_default', true)->first()?->img_url)
-                        : ($product->images->first()?->img_url ? url($product->images->first()?->img_url) : null),
-                    'items' => $items->map(function ($item) {
-                        return [
-                            'id' => $item->id,
-                            'product_item_id' => $item->product_item_id,
-                            'name' => $item->productItem->name,
-                            'customisations' => $item->customisations->groupBy('customisation_id')->map(function ($customisationGroup) {
-                                $customisation = $customisationGroup->first()->customisation;
-                                return [
-                                    'id' => $customisation->id,
-                                    'name' => $customisation->name,
-                                    'items' => $customisationGroup->map(function ($customisationItem) {
-                                        return [
-                                            'id' => $customisationItem->customProduct->id,
-                                            'name' => $customisationItem->customProduct->name,
-                                            'price' => $customisationItem->customProduct->price,
-                                        ];
-                                    })->toArray()
-                                ];
-                            })->values()->toArray()
-                        ];
-                    })->toArray()
-                ];
-            })->values()->toArray();
-
-            return [
-                'id' => $order->id,
-                'vendor' => [
-                    'id' => $order->vendor->id,
-                    'name' => $order->vendor->name,
-                    'icon' => $order->vendor->icon ? url($order->vendor->icon) : null,
-                    'address' => $order->vendor->address,
-                    'phone_one' => $order->vendor->phone_one,
-                    'phone_two' => $order->vendor->phone_two,
-                    'email' => $order->vendor->email,
-                    'latitude' => $order->vendor->latitude,
-                    'longitude' => $order->vendor->longitude,
-                ],
-                'address' => [
-                    'name' => $order->address->name,
-                    'location' => $order->address->location,
-                    'latitude' => $order->address->latitude,
-                    'longitude' => $order->address->longitude,
-                ],
-                'delivery_agent' => $order->deliveryAgent ? [
-                    'id' => $order->deliveryAgent->id,
-                    'name' => $order->deliveryAgent->name,
-                    'phone' => $order->deliveryAgent->phone,
-                    'avatar' => $order->deliveryAgent->avatar ? url($order->deliveryAgent->avatar) : null,
-                ] : null,
-                'customer' => [
-                    'id' => $order->customer->id,
-                    'name' => $order->customer->name,
-                    'phone_number' => $order->customer->phone_number,
-                    'avatar' => $order->customer->avatar ? url($order->customer->avatar) : null,
-                    'wallet' => $order->customer->wallet,
-                    'is_active' => $order->customer->is_active,
-                    'is_suspended' => $order->customer->is_suspended,
-                ],
-                'is_coupon' => $order->is_coupon,
-                'used_coupon' => $order->used_coupon,
-                'payment_method' => $order->payment_method,
-                'total_price' => $order->total_price,
-                'delivery_fee' => $order->delivery_fee,
-                'final_price' => $order->final_price,
-                'notes' => $order->notes,
-                'is_returnable' => $order->is_returnable,
-                'distance' => $order->distance,
-                'status' => $order->status,
-                'products' => $products,
-            ];
-        });
         return $this->successResponse([
             'data' => $formattedOrders,
             'pagination' => [
@@ -429,6 +213,200 @@ class OrdersController extends Controller
                 'last_page' => $orders->lastPage(),
                 'per_page' => $orders->perPage(),
                 'total' => $orders->total(),
+            ],
+        ], 'الطلبات تحت المعالجة الخاصة بالسائق تم استرجاعها بنجاح');
+    }
+
+
+    // returns here 
+
+    public function handleReturnAcceptance(Request $request, $returnId, ReturnService $returnsFormattingService)
+    {
+
+        // التحقق من وجود الطلب
+        $returns = Returns::with([
+            'returnItems.orderItem.productItem.product.images',
+            'returnItems.orderItem.customisations.customisation',
+            'returnItems.orderItem.customisations.customProduct',
+            'returnItems.orderItem.offer.images',
+            'returnImages'
+        ])->findOrFail($returnId);
+
+        // التحقق من وجود السائق
+        $deliveryAgentReturn = DeliveryAgentReturn::where('returns_id', $returnId)
+            ->where('delivery_agent_id', auth()->id())
+            ->first();
+
+        if (!$deliveryAgentReturn) {
+            return $this->errorResponse('الطلب غير مخصص لهذا السائق.', 404);
+        }
+
+        if ($deliveryAgentReturn->is_accepted || $deliveryAgentReturn->is_rejected) {
+            return $this->errorResponse('لقد تم التعامل مع الطلب بالفعل.', 400);
+        }
+
+        // قبول أو رفض الطلب بناءً على المعاملات
+        if ($request->accept) {
+            // قبول الطلب
+            $deliveryAgentReturn->acceptOrder();
+            $returns->status = 'accepted';  // تغيير الحالة إلى "في الطريق"
+            $returns->delivery_agent_id = auth()->id();
+            DeliveryAgentReturn::where('returns_id', $returnId)
+                ->where('delivery_agent_id', '!=', auth()->id()) // استثناء السائق الحالي
+                ->delete();
+            $statusMessage = 'تم قبول الطلب من قبل السائق وتغيير حالته إلى "في الطريق".';
+        } else {
+            // رفض الطلب
+            $deliveryAgentReturn->rejectOrder();
+            $statusMessage = 'تم رفض الطلب من قبل السائق وتغيير حالته إلى "معلق".';
+        }
+
+        // حفظ التغييرات في الطلب
+        $returns->save();
+        $formattedReturns = $returnsFormattingService->formatReturn($returns);
+        return $this->successResponse(
+            $formattedReturns,
+            $statusMessage
+        );
+    }
+
+
+    public function updateReturnStatus(Request $request, $returnId, ReturnService $returnsFormattingService)
+    {
+        // التحقق من وجود الطلب
+        $returns = Returns::with([
+            'returnItems.orderItem.productItem.product.images',
+            'returnItems.orderItem.customisations.customisation',
+            'returnItems.orderItem.customisations.customProduct',
+            'returnItems.orderItem.offer.images',
+            'returnImages'
+        ])->whereHas('deliveryAgentReturns', function ($query) {
+            // تحقق من أن السائق الحالي هو المعين للطلب
+            $query->where('delivery_agent_id', auth()->id());
+        })->findOrFail($returnId);
+
+        // التحقق من الحالة الجديدة وإجراء التحديث بناءً عليها
+        $newStatus = $request->status;
+
+        // التحقق من صحة الحالة المدخلة
+        $validStatuses = ['accepted', 'picked_up', 'returned_to_store', 'returned_product', 'refunded'];
+        if (!in_array($newStatus, $validStatuses)) {
+            return $this->errorResponse('الحالة غير صحيحة.', 400);
+        }
+
+        // التحقق من الترتيب المنطقي للحالات (يجب أن تكون الحالة التالية متسقة مع السابقة)
+        if ($newStatus == 'picked_up' && $returns->status != 'accepted') {
+            return $this->errorResponse('لا يمكن تغيير الحالة إلى "تم استلامه" لأن الطلب ليس في الطريق.', 400);
+        }
+
+        if ($newStatus == 'returned_to_store' && $returns->status != 'picked_up') {
+            return $this->errorResponse('لا يمكن تغيير الحالة إلى "تم التوصيل" لأن الطلب لم يتم استلامه بعد.', 400);
+        }
+
+        if ($newStatus == 'returned_product' && $returns->status != 'returned_to_store') {
+            return $this->errorResponse('لا يمكن تغيير الحالة إلى "تم التوصيل" لأن الطلب لم يتم استلامه بعد.', 400);
+        }
+
+        // تحديث حالة الطلب
+        $returns->status = $newStatus;
+        $returns->save();
+        $formattedReturns = $returnsFormattingService->formatReturn($returns);
+        return $this->successResponse(
+            $formattedReturns,
+            "تم تحديث حالة الطلب إلى \"$newStatus\"."
+        );
+    }
+
+    public function getNewReturnsForAgent(Request $request, ReturnService $returnsFormattingService)
+    {
+        // جلب الطلبات التي تخص السائق الحالي في حالة "معلق" أو "في الطريق"
+        $returns = Returns::with([
+            'returnItems.orderItem.productItem.product.images',
+            'returnItems.orderItem.customisations.customisation',
+            'returnItems.orderItem.customisations.customProduct',
+            'returnItems.orderItem.offer.images',
+            'returnImages'
+        ])
+            ->whereHas('deliveryAgentReturns', function ($query) {
+                // تحقق من أن السائق الحالي هو المعين للطلب
+                $query->where('delivery_agent_id', auth()->id());
+            })
+            ->whereIn('status', ['approved'])
+            ->orderBy('created_at', 'desc')  // ترتيب حسب تاريخ الإنشاء (أحدث أولاً)
+            ->paginate(10);  // تحديد عدد العناصر في الصفحة، يمكن تعديله بناءً على الحاجة
+
+        $formattedReturns = $returnsFormattingService->formatReturns($returns);
+        return $this->successResponse([
+            'data' => $formattedReturns,
+            'pagination' => [
+                'current_page' => $returns->currentPage(),
+                'last_page' => $returns->lastPage(),
+                'per_page' => $returns->perPage(),
+                'total' => $returns->total(),
+            ],
+        ], 'الطلبات الحديثة الخاصة بالسائق تم استرجاعها بنجاح');
+    }
+
+
+    public function getCompletedReturnsForAgent(Request $request, ReturnService $returnsFormattingService)
+    {
+        // جلب الطلبات التي تخص السائق الحالي في حالة "تم استلامه" أو "تم التوصيل"
+        $returns = Returns::with([
+            'returnItems.orderItem.productItem.product.images',
+            'returnItems.orderItem.customisations.customisation',
+            'returnItems.orderItem.customisations.customProduct',
+            'returnItems.orderItem.offer.images',
+            'returnImages'
+        ])
+            ->whereHas('deliveryAgentReturns', function ($query) {
+                // تحقق من أن السائق الحالي هو المعين للطلب
+                $query->where('delivery_agent_id', auth()->id());
+            })
+            ->whereIn('status', ['refunded'])
+            ->orderBy('updated_at', 'desc')  // ترتيب حسب تاريخ التحديث (أحدث أولاً)
+            ->paginate(10);  // تحديد عدد العناصر في الصفحة، يمكن تعديله بناءً على الحاجة
+
+        $formattedReturns = $returnsFormattingService->formatReturns($returns);
+
+        // إضافة بيانات الباجينيشن إلى الاستجابة
+        return $this->successResponse([
+            'data' => $formattedReturns,
+            'pagination' => [
+                'current_page' => $returns->currentPage(),
+                'last_page' => $returns->lastPage(),
+                'per_page' => $returns->perPage(),
+                'total' => $returns->total(),
+            ],
+        ], 'الطلبات المنفذة الخاصة بالسائق تم استرجاعها بنجاح');
+    }
+
+
+    public function getUnderProcessingReturnsForAgent(Request $request, ReturnService $returnsFormattingService)
+    {
+        // جلب الطلبات التي تخص السائق الحالي في حالة "معلق" أو "في الطريق"
+        $returns = Returns::with([
+            'returnItems.orderItem.productItem.product.images',
+            'returnItems.orderItem.customisations.customisation',
+            'returnItems.orderItem.customisations.customProduct',
+            'returnItems.orderItem.offer.images',
+            'returnImages'
+        ])
+            ->whereHas('deliveryAgentReturns', function ($query) {
+                // تحقق من أن السائق الحالي هو المعين للطلب
+                $query->where('delivery_agent_id', auth()->id());
+            })
+            ->whereIn('status', ['picked_up', 'returned_to_store', 'accepted', 'returned_product'])
+            ->orderBy('created_at', 'desc')  // ترتيب حسب تاريخ الإنشاء (أحدث أولاً)
+            ->paginate(10);  // تحديد عدد العناصر في الصفحة، يمكن تعديله بناءً على الحاجة
+        $formattedReturns = $returnsFormattingService->formatReturns($returns);
+
+        return $this->successResponse([
+            'data' => $formattedReturns,
+            'pagination' => [
+                'current_page' => $returns->currentPage(),
+                'last_page' => $returns->lastPage(),
+                'per_page' => $returns->perPage(),
+                'total' => $returns->total(),
             ],
         ], 'الطلبات تحت المعالجة الخاصة بالسائق تم استرجاعها بنجاح');
     }

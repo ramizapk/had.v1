@@ -13,16 +13,25 @@ class ReturnItem extends Model
         'return_id',
         'order_item_id',
         'quantity',
+        'unit_price',
+        'total_price',
+        'total_customisation_price',
     ];
 
     // Relationships
     public function returnOrder()
     {
-        return $this->belongsTo(Returns::class);
+        return $this->belongsTo(Returns::class, 'return_id'); // Use 'return_id' as foreign key
     }
 
+
+
+    public function returns()
+    {
+        return $this->belongsTo(Returns::class, 'return_id');
+    }
     public function orderItem()
     {
-        return $this->belongsTo(OrderItem::class);
+        return $this->belongsTo(OrderItem::class, 'order_item_id');
     }
 }

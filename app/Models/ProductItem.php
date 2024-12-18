@@ -15,6 +15,7 @@ class ProductItem extends Model
         'description',
         'publish',
         'price',
+        'quantity',
         'discount',
         'discount_type',
         'discount_amount',

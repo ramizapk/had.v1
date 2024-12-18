@@ -30,7 +30,7 @@ class ProductSeeder extends Seeder
                 $product = Product::create([
                     'product_name' => "Product {$i} for Vendor {$vendorId} in Category {$categoryId}",
                     'description' => "Description for Product {$i} in Category {$categoryId}",
-                    'publish' => rand(0, 1),
+                    'publish' => 1,
                     'vendor_id' => $vendorId,
                     'category_id' => $categoryId,
                     'created_by' => 1, // أو معرف المستخدم الإداري
@@ -51,7 +51,7 @@ class ProductSeeder extends Seeder
                         'name' => "Item {$k} for Product {$product->id}",
                         'description' => "Description for Item {$k}",
                         'price' => rand(100, 1000) / 10,
-                        'publish' => rand(0, 1),
+                        'publish' => 1,
                         'product_id' => $product->id,
                         'created_by' => 1,
                     ]);

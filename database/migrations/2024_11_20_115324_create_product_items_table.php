@@ -16,6 +16,7 @@ return new class extends Migration {
             $table->text('description')->nullable();
             $table->boolean('publish')->default(true);
             $table->decimal('price', 8, 2)->default(0)->nullable();
+            $table->integer('quantity')->default(0)->nullable();
             $table->decimal('discount', 8, 2)->default(0)->nullable();
             $table->enum('discount_type', ['none', 'percentage', 'fixed']);
             $table->decimal('discount_amount', 8, 2)->default(0)->nullable();

@@ -48,6 +48,8 @@ class VendorResource extends JsonResource
             'section' => $this->section ? $this->section->name : null,
             'work_times' => WorkTimeResource::collection($this->workTimes),
             'is_favorite' => $isFavorite,
+            'direct_order' => $this->direct_order,
+            'is_service_provider' => $this->is_service_provider,
             'delivery_details' => $deliveryDetails ? [
                 'distance' => $deliveryDetails['distance_km'],
                 'estimated_time' => $deliveryDetails['estimated_time_minutes'],

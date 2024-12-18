@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\V1\Admin\VendorResource;
 use App\Http\Resources\V1\Admin\WorkTimeResource;
 use App\Models\Vendor;
+use App\Models\VendorImage;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
 class VendorController extends Controller
 {
     use ApiResponse;
@@ -34,6 +36,8 @@ class VendorController extends Controller
             'email' => 'nullable|email|max:255',
             'icon' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'publish' => 'nullable|boolean',
+            'direct_order' => 'nullable|boolean',
+            'is_service_provider' => 'nullable|boolean',
             'address' => 'nullable|string|max:255',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
@@ -159,5 +163,111 @@ class VendorController extends Controller
         $vendor->workTimes()->createMany($request->work_times);
 
         return $this->successResponse(new VendorResource($vendor), 'Work times updated successfully.');
+    }
+
+
+    // vendor gallary
+    public function getVendorsGallery($vendorId)
+    {
+        $vendor = Vendor::where('id', $vendorId)->where('is_service_provider', 1)->first();
+
+        if (!$vendor) {
+            return $this->errorResponse('Vendor not found or not a service provider.', 404);
+        }
+
+        $images = $vendor->images->map(function ($image) {
+            return [
+                'id' => $image->id,
+                'image_url' => $image->image_url ? Storage::url($image->image_url) : null,
+            ];
+        });
+
+        return $this->successResponse($images, 'Vendor images retrieved successfully.');
+    }
+
+    public function storeVendorImage(Request $request, $vendorId)
+    {
+        // التحقق من وجود الفيندور
+        $vendor = Vendor::where('id', $vendorId)->where('is_service_provider', 1)->first();
+
+        if (!$vendor) {
+            return $this->errorResponse('Vendor not found or not a service provider.', 404);
+        }
+
+        // التحقق من صحة البيانات
+        $request->validate([
+            'images' => 'required|array', // الصور كمصفوفة
+            'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048', // صورة بحجم لا يتجاوز 2 ميجابايت
+        ]);
+
+        $uploadedImages = [];
+
+        // رفع الصور وحفظها في المسار المحدد
+        foreach ($request->file('images') as $imageFile) {
+            $imagePath = $imageFile->store('uploads/vendorGallary', 'public');
+
+            // حفظ المسار في قاعدة البيانات
+            $image = VendorImage::create([
+                'vendor_id' => $vendor->id,
+                'image_url' => $imagePath,
+            ]);
+
+            $uploadedImages[] = $image;
+        }
+
+        $images = $vendor->images->map(function ($image) {
+            return [
+                'id' => $image->id,
+                'image_url' => $image->image_url ? Storage::url($image->image_url) : null,
+            ];
+        });
+
+        return $this->successResponse([$images], 'Vendor images uploaded and saved successfully.');
+    }
+
+    public function updateVendorImage(Request $request, $imageId)
+    {
+        // الحصول على الصورة
+        $image = VendorImage::find($imageId);
+
+        if (!$image || $image->vendor->is_service_provider != 1) {
+            return $this->errorResponse('Image not found or vendor is not a service provider.', 404);
+        }
+
+        // التحقق من صحة البيانات
+        $request->validate([
+            'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048', // صورة جديدة
+        ]);
+
+        // حذف الصورة القديمة إذا كانت موجودة
+        if ($image->image_url && \Storage::disk('public')->exists($image->image_url)) {
+            \Storage::disk('public')->delete($image->image_url);
+        }
+
+        // رفع الصورة الجديدة وتحديث المسار
+        $newImagePath = $request->file('image')->store('uploads/vendorGallary', 'public');
+        $image->update(['image_url' => $newImagePath]);
+
+        return $this->successResponse([], 'Vendor image updated successfully.');
+    }
+
+    public function deleteVendorImage($imageId)
+    {
+        // البحث عن الصورة
+        $image = VendorImage::find($imageId);
+
+        if (!$image || $image->vendor->is_service_provider != 1) {
+            return $this->errorResponse('Image not found or vendor is not a service provider.', 404);
+        }
+
+        // حذف الصورة الفعلية من التخزين
+        if ($image->image_url && \Storage::disk('public')->exists($image->image_url)) {
+            \Storage::disk('public')->delete($image->image_url);
+        }
+
+        // حذف السجل من قاعدة البيانات
+        $image->delete();
+
+        return $this->successResponse(null, 'Vendor image deleted successfully.');
     }
 }

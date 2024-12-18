@@ -12,7 +12,9 @@ class Order extends Model
     protected $fillable = [
         'customer_id',
         'vendor_id',
-        'address_id',
+        'customer_location',
+        'customer_latitude',
+        'customer_longitude',
         'delivery_agent_id',
         'status',
         'total_price',
@@ -47,10 +49,6 @@ class Order extends Model
         return $this->belongsTo(Vendor::class);
     }
 
-    public function address()
-    {
-        return $this->belongsTo(Address::class);
-    }
 
     public function deliveryAgent()
     {

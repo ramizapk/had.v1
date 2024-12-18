@@ -11,13 +11,20 @@ class Returns extends Model
 
     protected $fillable = [
         'order_id',
+        'customer_id',
+        'vendor_id',
         'delivery_agent_id',
         'delivery_fee',
+        'customer_location',
+        'customer_latitude',
+        'customer_longitude',
         'distance',
         'status',
         'reason',
+        'return_price',
+        'payment_method',
+        'payment_status',
     ];
-
     protected $casts = [
         'delivery_fee' => 'decimal:2',
         'distance' => 'decimal:2',
@@ -29,6 +36,11 @@ class Returns extends Model
         return $this->belongsTo(Order::class);
     }
 
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class);
+    }
     public function deliveryAgent()
     {
         return $this->belongsTo(DeliveryAgent::class);
@@ -36,8 +48,9 @@ class Returns extends Model
 
     public function returnItems()
     {
-        return $this->hasMany(ReturnItem::class);
+        return $this->hasMany(ReturnItem::class, 'return_id'); // اسم العمود الصحيح
     }
+
 
     public function returnImages()
     {
@@ -48,5 +61,29 @@ class Returns extends Model
     public function getReturnStatus()
     {
         return $this->status == 'pending' ? 'Processing' : ucfirst($this->status);
+    }
+
+    public function vendor()
+    {
+        return $this->belongsTo(Vendor::class);
+    }
+
+    public function statusLogs()
+    {
+        return $this->hasMany(ReturnStatusLog::class);
+    }
+
+    public function deliveryAgentReturns()
+    {
+        return $this->hasMany(DeliveryAgentReturn::class, 'returns_id');
+    }
+
+    public function updateStatus($status, $userId)
+    {
+        $this->update(['status' => $status]);
+        $this->statusLogs()->create([
+            'status' => $status,
+            'changed_by' => $userId,
+        ]);
     }
 }

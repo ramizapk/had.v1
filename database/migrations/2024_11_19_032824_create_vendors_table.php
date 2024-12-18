@@ -20,7 +20,9 @@ return new class extends Migration {
             $table->string('address')->nullable();
             $table->double('latitude')->nullable();
             $table->double('longitude')->nullable();
-            $table->boolean('publish')->default(false);
+            $table->boolean('publish')->default(true);
+            $table->boolean('direct_order')->default(false);
+            $table->boolean('is_service_provider')->default(false);
             $table->foreignId('section_id')->nullable()->constrained('sections')->cascadeOnDelete();
             $table->unsignedBigInteger('created_by')->nullable();
             $table->unsignedBigInteger('updated_by')->nullable();

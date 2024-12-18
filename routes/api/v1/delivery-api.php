@@ -37,3 +37,14 @@ Route::prefix('/orders')->controller(OrdersController::class)->group(function ()
 
 
 });
+
+Route::prefix('/returns')->controller(OrdersController::class)->group(function () {
+
+    Route::post('/return-acceptance/{returnId}', 'handleReturnAcceptance')->middleware('auth:sanctum', 'isDelivery');
+    Route::post('/update-status/{returnId}', 'updateReturnStatus')->middleware('auth:sanctum', 'isDelivery');
+    Route::get('/new', 'getNewReturnsForAgent')->middleware('auth:sanctum', 'isDelivery');
+    Route::get('/completed', 'getCompletedReturnsForAgent')->middleware('auth:sanctum', 'isDelivery');
+    Route::get('/under-processing', 'getUnderProcessingReturnsForAgent')->middleware('auth:sanctum', 'isDelivery');
+
+
+});

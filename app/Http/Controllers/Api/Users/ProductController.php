@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\Users;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\V1\Admin\ProductResource;
+use App\Models\Category;
+use App\Models\CategoryVendor;
 use App\Models\CustomisationItem;
 use App\Models\ProductImage;
 use App\Traits\ApiResponse;
@@ -150,13 +152,16 @@ class ProductController extends Controller
             'publish' => 'required|boolean',
             'vendor_id' => 'required|exists:vendors,id',
             'category_id' => 'required|exists:categories,id',
+            'is_offer' => 'required|boolean',
+            'offer_price' => 'nullable|numeric|min:0',
             'images' => 'required|array',
             'images.*.img_file' => 'required|file|mimes:jpeg,png,jpg,gif|max:2048', // الصورة مطلوبة
             'images.*.is_default' => 'required|boolean',
             'items' => 'required|array',
             'items.*.name' => 'required|string|max:255',
             'items.*.description' => 'nullable|string',
-            'items.*.price' => 'required|numeric|min:0',
+            'items.*.price' => 'required_if:is_offer,false|nullable|numeric|min:0',
+            'items.*.quantity' => 'required_if:is_offer,true|nullable|numeric|min:1',
             'items.*.publish' => 'required|boolean',
             'items.*.customisations' => 'nullable|array', // إضافة التحقق من customisations
             'items.*.customisations.*.id' => 'nullable|exists:customisations,id', // التحقق من الـ ID إذا كان موجوداً
@@ -170,6 +175,23 @@ class ProductController extends Controller
             'items.*.customisations.*.items.*.price' => 'nullable|numeric|min:0', // التحقق من سعر المنتج المخصص
         ]);
 
+
+        $category = Category::find($validated['category_id']);
+
+        if (!$category) {
+            return response()->json(['error' => 'Category does not exist'], 404);
+        }
+        $belongsToVendor = CategoryVendor::where('category_id', $category->id)
+            ->where('vendor_id', $validated['vendor_id'])
+            ->exists();
+
+        if (!$belongsToVendor) {
+            return response()->json(['error' => 'This category does not belong to the current vendor'], 403);
+        }
+
+        if ($validated['is_offer'] && !$category->is_offer) {
+            return response()->json(['error' => 'This category must belong to the offers section'], 400);
+        }
         // إنشاء المنتج
         $product = Product::create(array_merge($validated, [
             'created_by' => auth()->id(), // أو Auth::id()
@@ -196,14 +218,22 @@ class ProductController extends Controller
 
         // إضافة العناصر (Product Items)
         foreach ($validated['items'] as $itemData) {
-            $productItem = ProductItem::create([
+            $productItemData = [
                 'name' => $itemData['name'],
                 'description' => $itemData['description'],
-                'price' => $itemData['price'],
                 'publish' => $itemData['publish'],
                 'product_id' => $product->id,
                 'created_by' => auth()->id(),
-            ]);
+            ];
+
+            if ($validated['is_offer']) {
+                $productItemData['quantity'] = $itemData['quantity'];
+            } else {
+                $productItemData['price'] = $itemData['price'];
+            }
+
+            $productItem = ProductItem::create($productItemData);
+
 
             if (!empty($itemData['customisations'])) {
                 foreach ($itemData['customisations'] as $customisationData) {
@@ -217,7 +247,7 @@ class ProductController extends Controller
                             'is_multi_select' => $customisationData['is_multi_select'],
                         ]);
 
-                    Log::debug('Customisation: ', ['id' => $customisation->id, 'name' => $customisation->name]);
+                    // Log::debug('Customisation: ', ['id' => $customisation->id, 'name' => $customisation->name]);
 
                     $items = [];
                     if (!empty($customisationData['items'])) {
@@ -232,7 +262,7 @@ class ProductController extends Controller
                                     'customisation_id' => $customisation->id,
                                 ]);
 
-                            Log::debug('Custom Product: ', ['id' => $customProduct->id, 'name' => $customProduct->name]);
+                            // Log::debug('Custom Product: ', ['id' => $customProduct->id, 'name' => $customProduct->name]);
 
                             $items[] = [
                                 'id' => $customProduct->id,

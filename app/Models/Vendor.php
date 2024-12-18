@@ -21,6 +21,8 @@ class Vendor extends Model
         'email',
         'icon',
         'publish',
+        'direct_order',
+        'is_service_provider',
         'address',
         'latitude',
         'longitude',
@@ -30,6 +32,8 @@ class Vendor extends Model
     ];
     protected $casts = [
         'publish' => 'boolean',
+        'direct_order' => 'boolean',
+        'is_service_provider' => 'boolean',
     ];
 
 
@@ -42,7 +46,10 @@ class Vendor extends Model
     {
         return $this->hasMany(WorkTime::class, 'vendor_id', 'id');
     }
-
+    public function images(): HasMany
+    {
+        return $this->hasMany(VendorImage::class, 'vendor_id', 'id');
+    }
 
 
     public function createdBy(): BelongsTo

@@ -14,7 +14,9 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('customer_id')->constrained('customers');
             $table->foreignId('vendor_id')->constrained('vendors');
-            $table->foreignId('address_id')->nullable()->constrained('addresses');
+            $table->longText('customer_location')->nullable();
+            $table->double('customer_latitude');
+            $table->double('customer_longitude');
             $table->foreignId('delivery_agent_id')->nullable()->constrained('delivery_agents');
             $table->enum('status', [
                 'pending',

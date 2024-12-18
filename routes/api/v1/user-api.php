@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Auth\UserAuthController;
 use App\Http\Controllers\Api\Users\AdvertisementController;
+use App\Http\Controllers\Api\Users\ApplicationSettingController;
 use App\Http\Controllers\Api\Users\CategoryController;
 use App\Http\Controllers\Api\Users\DeliveryAgentController;
 use App\Http\Controllers\Api\Users\OrdersController;
@@ -177,5 +178,27 @@ Route::prefix('/orders')->controller(OrdersController::class)->middleware(['auth
     Route::get('/', 'index'); // عرض جميع وسائل الدفع
     Route::post('/assign-order-to-agent/{orderId}', 'assignDeliveryAgent'); // إضافة وسيلة دفع جديدة
     Route::post('/change-status/{orderId}', 'changeOrderStatus'); // إضافة وسيلة دفع جديدة
+
+});
+
+Route::prefix('/returns')->controller(OrdersController::class)->middleware(['auth:sanctum', 'isUser'])->group(function () {
+    Route::get('/', 'getReturns'); // عرض جميع وسائل الدفع
+    Route::post('/assign-return-to-agent/{returnId}', 'assignReturnsToDeliveryAgent'); // إضافة وسيلة دفع جديدة
+    Route::post('/change-status/{returnId}', 'changeReturnStatus'); // إضافة وسيلة دفع جديدة
+
+});
+
+
+Route::prefix('/gallery')->controller(VendorController::class)->middleware(['auth:sanctum', 'isUser'])->group(function () {
+    Route::get('/get/{vendorId}', 'getVendorsGallery'); // عرض جميع وسائل الدفع
+    Route::post('/add/{vendorId}', 'storeVendorImage'); // إضافة وسيلة دفع جديدة
+    Route::post('/update/{imageId}', 'updateVendorImage'); // إضافة وسيلة دفع جديدة
+    Route::delete('/delete/{imageId}', 'deleteVendorImage');
+});
+
+
+Route::prefix('/app-settings')->controller(ApplicationSettingController::class)->middleware(['auth:sanctum', 'isUser'])->group(function () {
+    Route::get('/get', 'getSettings'); // عرض جميع وسائل الدفع
+    Route::post('/add', 'upsertSettings'); // إضافة وسيلة دفع جديدة
 
 });

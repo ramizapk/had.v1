@@ -38,8 +38,9 @@ class ProductResource extends JsonResource
                     return [
                         'id' => $item->id,
                         'name' => $item->name,
-                        'quantity' => $item->description, // عرض الوصف ككمية
-    
+                        'description' => $item->description,
+                        'quantity' => $item->quantity,
+
                     ];
                 } else {
                     // إذا لم يكن المنتج عرضًا

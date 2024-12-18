@@ -31,6 +31,7 @@ class CategoryController extends Controller
             'publish' => 'nullable|boolean',
             'order' => 'nullable|integer',
             'section_id' => 'required|exists:sections,id',
+            'is_offer' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -45,6 +46,7 @@ class CategoryController extends Controller
             'order' => $request->order,
             'section_id' => $request->section_id,
             'created_by' => auth()->id(),
+            'is_offer' => $request->is_offer,
         ]);
 
         return $this->successResponse(new CategoryResource($category), 'Category created successfully', 201); // استخدام successResponse

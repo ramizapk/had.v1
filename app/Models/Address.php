@@ -52,15 +52,24 @@ class Address extends Model
     }
 
 
-    public function calculateDeliveryDistanceAndTime(Vendor $vendor)
+    public function calculateDeliveryDistanceAndTime($vendor = null, $vendorLat = null, $vendorLong = null)
     {
         // إحداثيات العميل
         $customerLat = $this->latitude;
         $customerLng = $this->longitude;
 
-        // إحداثيات الفيندور
-        $vendorLat = $vendor->latitude;
-        $vendorLng = $vendor->longitude;
+        // إذا كان هناك فيندور (Vendor) ممرر، نستخدم إحداثياته
+        if ($vendor) {
+            $vendorLat = $vendor->latitude;
+            $vendorLong = $vendor->longitude;
+        }
+
+        // إذا كانت إحداثيات الفيندور غير موجودة، نرجع خطأ أو رسالة توضح ذلك
+        if (!$vendorLat || !$vendorLong) {
+            return [
+                'error' => 'Vendor location is required'
+            ];
+        }
 
         // حساب المسافة باستخدام صيغة Haversine
         $earthRadius = 6371; // نصف قطر الأرض بالكيلومتر
@@ -68,7 +77,7 @@ class Address extends Model
         $latFrom = deg2rad($customerLat);
         $lonFrom = deg2rad($customerLng);
         $latTo = deg2rad($vendorLat);
-        $lonTo = deg2rad($vendorLng);
+        $lonTo = deg2rad($vendorLong);
 
         $latDelta = $latTo - $latFrom;
         $lonDelta = $lonTo - $lonFrom;
@@ -92,4 +101,5 @@ class Address extends Model
             'estimated_time_minutes' => $deliveryTimeMinutes,
         ];
     }
+
 }
